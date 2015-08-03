@@ -28,7 +28,7 @@ class RXThread(threading.Thread):
     def run(self):
         self.running = True
         while self.running:
-            rx, _, _ = select.select([self.context.fd], [], [], 60)
+            rx, _, _ = select.select([self.context.fd], [], [], 1)
             if rx:
                 msg, address = self.context.fd.recvfrom(0xFFFF)
                 self.context.attend(address, msg)
