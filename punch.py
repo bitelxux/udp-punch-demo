@@ -14,7 +14,7 @@ class Logger(object):
         self.name = name
 
     def log(self, msg):
-        print "%s: %s" % (self.name, msg)
+        print "[%s] %s" % (self.name, msg)
 
 
 class RXThread(threading.Thread):
@@ -64,17 +64,17 @@ class App(object):
         if time.time() + 60 > self.peers[src]['expires']:
             self.peers[src]['expires'] = time.time() + 60
         if cmd == 'SEA':
-            print "Received SEA from %s for %s" % (src, payload)
+            logger.log("Received SEA from %s for %s" % (src, payload))
             if payload in self.peers and src in self.peers:
                 self.send_call(src, payload)
         elif cmd == 'HEL':
-            print "Received HEL from %s at %s" % (src, str(address))
+            logger.log("Received HEL from %s at %s" % (src, str(address)))
         elif cmd == 'CAL':
             tar, address = payload.split("=")
             address = eval(address)
             self.send(tar, 'HEL', '', address)
         elif cmd == 'TXT':
-            print "%s says: %s" %(src, payload)
+            logger.log("%s says: %s" %(src, payload))
 
     def send_call(self, src, tar):
         logger.log("Sending CAL from %s to %s" %(src, tar))
@@ -128,19 +128,18 @@ class App(object):
         ts = time.time()
         while self.running:
 
-            if self.name != "matchmaker":
-                if self.peer:
-                    msg += 1
-                    peer_data = self.peers.get(self.peer)
-                    if not peer_data:
-                        self.sea(self.peer)
-                    else:
-                        self.send(self.peer, 'TXT', 'Hello man %d' % msg, peer_data['address'])
+            if time.time() - ts > 10:
+                ts = time.time()
+                self.publish()
+                self.purge()
 
-                if time.time() - ts > 10:
-                    ts = time.time()
-                    self.publish()
-                    self.purge()
+            if self.peer:
+                msg += 1
+                peer_data = self.peers.get(self.peer)
+                if not peer_data:
+                    self.sea(self.peer)
+                else:
+                    self.send(self.peer, 'TXT', 'Hello man %d' % msg, peer_data['address'])
 
             time.sleep(1)
 
