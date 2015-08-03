@@ -54,14 +54,17 @@ class App(object):
         self.peers = dict()
         self.peers['matchmaker'] = {}
         self.peers['matchmaker']['address'] = ('matchmaker.foo', 9999)
-        self.peers['matchmaker']['ts'] = time.time()
+        self.peers['matchmaker']['expires'] = time.time() + 100*365*86400
 
     def attend(self, address, msg):
         src, tar, cmd, payload = msg.split(':')
         self.peers.setdefault(src,{})
         self.peers[src]['address'] = address
-        self.peers[src]['ts'] = time.time()
+        self.peers[src].setdefault('expires', time.time() + 60)
+        if time.time() + 60 > self.peers[src]['expires']:
+            self.peers[src]['expires'] = time.time() + 60
         if cmd == 'SEA':
+            print "Received SEA from %s for %s" % (src, payload)
             if payload in self.peers and src in self.peers:
                 self.send_call(src, payload)
         elif cmd == 'HEL':
@@ -111,6 +114,12 @@ class App(object):
         self.rxthread = RXThread(self)
         self.rxthread.start()
 
+    def purge(self):
+        for peer, peer_data in self.peers.items():
+            if time.time() > peer_data['expires']:
+                logger.log("Purging peer %s" % peer)
+                del self.peers[peer]
+
     def run(self):
 
         self.running = True
@@ -131,6 +140,7 @@ class App(object):
                 if time.time() - ts > 10:
                     ts = time.time()
                     self.publish()
+                    self.purge()
 
             time.sleep(1)
 
