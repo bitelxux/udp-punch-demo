@@ -8,6 +8,8 @@ import sys
 import threading
 import signal
 
+PURGE_TIME = 20
+DEAD_MAN_TIME = 10
 
 class Logger(object):
     def __init__(self, name):
@@ -27,11 +29,18 @@ class RXThread(threading.Thread):
 
     def run(self):
         self.running = True
+
         while self.running:
             rx, _, _ = select.select([self.context.fd], [], [], 1)
             if rx:
                 msg, address = self.context.fd.recvfrom(0xFFFF)
-                self.context.attend(address, msg)
+	        logger.log("RCV %s: %s" % (str(address), msg))
+
+	        try:
+	            self.context.attend(address, msg)
+	        except:
+	            # I do not want to manage the error in this demo
+	            pass
 
     def stop(self):
         self.running = False
@@ -52,9 +61,9 @@ class App(object):
     def init_peers(self):
 
         self.peers = dict()
-        self.peers['matchmaker'] = {}
-        self.peers['matchmaker']['address'] = ('matchmaker.foo', 9999)
-        self.peers['matchmaker']['expires'] = time.time() + 100*365*86400
+        self.peers['presenter'] = {}
+        self.peers['presenter']['address'] = ('presenter', 9999)
+        self.peers['presenter']['expires'] = time.time() + 100*365*86400
 
     def attend(self, address, msg):
         src, tar, cmd, payload = msg.split(':')
@@ -75,6 +84,8 @@ class App(object):
             self.send(tar, 'HEL', '', address)
         elif cmd == 'TXT':
             logger.log("%s says: %s" %(src, payload))
+            #time.sleep(1)
+	    #self.send(src, 'TXT', 'Got it !!', address)
 
     def send_call(self, src, tar):
         logger.log("Sending CAL from %s to %s" %(src, tar))
@@ -125,12 +136,16 @@ class App(object):
         self.running = True
         msg = 0
 
-        ts = time.time()
+        dead_man_ts = time.time()
+        purge_ts = time.time()
         while self.running:
 
-            if time.time() - ts > 10:
-                ts = time.time()
+            if time.time() - dead_man_ts > DEAD_MAN_TIME:
+                dead_man_ts = time.time()
                 self.publish()
+
+            if time.time() - purge_ts > PURGE_TIME:
+             	purge_ts = time.time()
                 self.purge()
 
             if self.peer:
@@ -160,7 +175,7 @@ if __name__ == "__main__":
 
     name = sys.argv[1]
     port = None
-    if name == 'matchmaker':
+    if name == 'presenter':
         port = 9999
         peer = None
     elif name == 'nodeA':
