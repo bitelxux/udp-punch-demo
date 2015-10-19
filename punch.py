@@ -7,9 +7,10 @@ import socket
 import sys
 import threading
 import signal
+import argparse
 
-PURGE_TIME = 20
-DEAD_MAN_TIME = 10
+PURGE_TIME = 10
+DEAD_MAN_TIME = 5
 
 class Logger(object):
     def __init__(self, name):
@@ -17,7 +18,6 @@ class Logger(object):
 
     def log(self, msg):
         print "[%s] %s" % (self.name, msg)
-
 
 class RXThread(threading.Thread):
 
@@ -54,24 +54,24 @@ class App(object):
     port = None
     name = None
     running = False
+    presenter = None
 
     def send(self, tar, cmd, payload, address):
         self.fd.sendto('%s:%s:%s:%s' % (self.name, tar, cmd, payload), address)
 
-    def init_peers(self):
-
-        self.peers = dict()
-        self.peers['presenter'] = {}
-        self.peers['presenter']['address'] = ('presenter', 9999)
-        self.peers['presenter']['expires'] = time.time() + 100*365*86400
+    def add_peer(self, peer, expires):
+        
+        self.peers[peer[0]] = {}
+        self.peers[peer[0]]['address'] = (peer[ 0], peer[1])
+        self.peers[peer[0]]['expires'] = time.time() + expires
 
     def attend(self, address, msg):
         src, tar, cmd, payload = msg.split(':')
         self.peers.setdefault(src,{})
         self.peers[src]['address'] = address
-        self.peers[src].setdefault('expires', time.time() + 60)
-        if time.time() + 60 > self.peers[src]['expires']:
-            self.peers[src]['expires'] = time.time() + 60
+        self.peers[src].setdefault('expires', time.time() + PURGE_TIME)
+        if time.time() + PURGE_TIME > self.peers[src]['expires']:
+            self.peers[src]['expires'] = time.time() + PURGE_TIME
         if cmd == 'SEA':
             logger.log("Received SEA from %s for %s" % (src, payload))
             if payload in self.peers and src in self.peers:
@@ -106,19 +106,24 @@ class App(object):
 
     def __init__(self, **kw):
 
+        self.peers = dict()
+
         if kw.get('name'):
             self.name = kw['name']
         if kw.get('port'):
             self.port = kw['port']
         if kw.get('peer'):
             self.peer = kw['peer']
+        if kw.get('presenter'):
+            self.presenter = kw['presenter']
 
         self.fd = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.fd.setblocking(0)
         if self.port:
             self.fd.bind(('0.0.0.0', self.port))
 
-        self.init_peers()
+        if self.presenter:
+            self.add_peer(self.presenter, 84600*365)
 
         self.publish()
 
@@ -169,24 +174,34 @@ def signal_handler(signal, frame):
     print('You pressed Ctrl+C!')
     app.stop()
 
+def parse_arguments():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-p", "--port", help="Port")
+    parser.add_argument("--presenter", help="Presenter")
+    parser.add_argument("-u", "--uuid", help="UUID")
+    parser.add_argument("--peer", help="peer")    
+    return parser.parse_args()
+
 if __name__ == "__main__":
 
     global app, logger
+    args = parse_arguments()
+    print args
 
-    name = sys.argv[1]
-    port = None
-    if name == 'presenter':
-        port = 9999
-        peer = None
-    elif name == 'nodeA':
-        peer = 'nodeB'
-    elif name == 'nodeB':
-        peer = None
+    name = args.uuid
+    peer = args.peer
+    port = args.port and int(args.port) or None
+    if args.presenter:
+        presenter_ip, presenter_port = args.presenter.split(':')
+        presenter_address = (presenter_ip, int(presenter_port))
+    else:
+        presenter_address = None
 
     logger = Logger(name=name)
     app = App(name=name,
               peer=peer,
-              port=port)
+              port=port,
+              presenter=presenter_address)
 
     signal.signal(signal.SIGINT, signal_handler)
     app.run()
