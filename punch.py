@@ -9,8 +9,7 @@ import threading
 import signal
 import argparse
 
-PURGE_TIME = 10
-DEAD_MAN_TIME = 5
+DEAD_MAN_TIME = 15
 
 class Logger(object):
     def __init__(self, name):
@@ -59,19 +58,19 @@ class App(object):
     def send(self, tar, cmd, payload, address):
         self.fd.sendto('%s:%s:%s:%s' % (self.name, tar, cmd, payload), address)
 
-    def add_peer(self, peer, expires):
+    def add_peer(self, peer, expires=DEAD_MAN_TIME):
         
         self.peers[peer[0]] = {}
-        self.peers[peer[0]]['address'] = (peer[ 0], peer[1])
+        self.peers[peer[0]]['address'] = (peer[0], peer[1])
         self.peers[peer[0]]['expires'] = time.time() + expires
 
     def attend(self, address, msg):
         src, tar, cmd, payload = msg.split(':')
         self.peers.setdefault(src,{})
         self.peers[src]['address'] = address
-        self.peers[src].setdefault('expires', time.time() + PURGE_TIME)
-        if time.time() + PURGE_TIME > self.peers[src]['expires']:
-            self.peers[src]['expires'] = time.time() + PURGE_TIME
+        self.peers[src].setdefault('expires', time.time() + DEAD_MAN_TIME)
+        if time.time() + DEAD_MAN_TIME > self.peers[src]['expires']:
+            self.peers[src]['expires'] = time.time() + DEAD_MAN_TIME
         if cmd == 'SEA':
             logger.log("Received SEA from %s for %s" % (src, payload))
             if payload in self.peers and src in self.peers:
@@ -123,7 +122,7 @@ class App(object):
             self.fd.bind(('0.0.0.0', self.port))
 
         if self.presenter:
-            self.add_peer(self.presenter, 84600*365)
+            self.add_peer(self.presenter, expires=84600*365)
 
         self.publish()
 
@@ -145,11 +144,11 @@ class App(object):
         purge_ts = time.time()
         while self.running:
 
-            if time.time() - dead_man_ts > DEAD_MAN_TIME:
+            if time.time() - dead_man_ts > DEAD_MAN_TIME - 5:
                 dead_man_ts = time.time()
                 self.publish()
 
-            if time.time() - purge_ts > PURGE_TIME:
+            if time.time() - purge_ts > DEAD_MAN_TIME:
              	purge_ts = time.time()
                 self.purge()
 
