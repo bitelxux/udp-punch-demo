@@ -34,7 +34,6 @@ class RXThread(threading.Thread):
             if rx:
                 msg, address = self.context.fd.recvfrom(0xFFFF)
 	        logger.log("RCV %s: %s" % (str(address), msg))
-
 	        try:
 	            self.context.attend(address, msg)
 	        except:
@@ -79,6 +78,7 @@ class App(object):
             logger.log("Received HEL from %s at %s" % (src, str(address)))
         elif cmd == 'CAL':
             tar, address = payload.split("=")
+            logger.log("Sending HEL to %s" % address)
             address = eval(address)
             self.send(tar, 'HEL', '', address)
         elif cmd == 'TXT':
@@ -158,7 +158,8 @@ class App(object):
                 if not peer_data:
                     self.sea(self.peer)
                 else:
-                    self.send(self.peer, 'TXT', 'Hello man %d' % msg, peer_data['address'])
+                    self.send(self.peer, 'TXT', 
+                    "do it or don't do it but don't try %d" % msg, peer_data['address'])
 
             time.sleep(1)
 
